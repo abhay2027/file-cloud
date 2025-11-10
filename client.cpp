@@ -178,18 +178,11 @@ public:
 
         getline(cin, input); 
         password=stoi(input);
-        cout<<sizeof(password)<<endl;
         bytes=htonl(password);        
         write(sock, (char *)&bytes, sizeof(bytes));
 
-        int n = read(sock, errorr, sizeof(errorr) - 1);
-        if(n>0){
-         if (strncmp(errorr, "ERROR", 5) == 0)
-        {
-            cerr << "Username already exists. Please use a different one.";
-        }
     }
-    }
+    
 };
 
 class server : public menu

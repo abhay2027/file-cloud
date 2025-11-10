@@ -140,27 +140,10 @@ protected:
     int storedpwd;
 
 private:
-    bool userexists(const char *uname)
-    {
-        ifstream infile("password.txt");
-        string user;
-        int pass;
 
-        while (infile >> user >> pass)
-        {
-            if (user == uname)
-            {
-                infile.close();
-                return true;
-            }
-        }
-
-        infile.close();
-        return false;
-    }
 
 public:
-    void createaccountdetails(int clientsock)
+   void createaccountdetails(int clientsock)
     {
         buffer = "enter a unique username :";
         n = read(clientsock, username, 20);
@@ -178,22 +161,13 @@ public:
         password = ntohl(byteschoice);
         cout << password << endl;
 
-        if (userexists(username))
-        {
-            cout << "User already exists! Please use a different username.\n";
-            string msg = "ERROR";
-            send(clientsock, msg.c_str(), msg.size(), 0);
-            close(clientsock);
-            return;
-        }
         ofstream outfile("password.txt", ios::app);
         outfile << username << " " << password << endl;
         cout << "pwd stored" << endl;
         outfile.close();
     }
-    void enterdetails(int clientsock)
-    {
-        buffer = "enter a unique username :";
+void enterdetails(int clientsock){
+         buffer = "enter a unique username :";
         n = read(clientsock, username, 20);
         username[strcspn(username, "\n\r")] = '\0';
 
@@ -206,9 +180,14 @@ public:
 
         buffer = "enter a password";
         n = read(clientsock, (char *)&byteschoice, sizeof(byteschoice));
+             if (n <= 0)
+        {
+            cerr << "failed to read password";
+            exit(1);
+        }
         password = ntohl(byteschoice);
         cout << password << endl;
-    }
+}
     string returnuser()
     {
         return string(username);
@@ -251,13 +230,15 @@ public:
         mkdir("users", 0777);
         std::string path = "users/" + foldername;
         mkdir(path.c_str(), 0777);
+        cout<<"folder created";
+
     }
 
     void openfolder()
     {
-        system(("ls -l users/" + foldername).c_str());
-        cout << "folder created";
+        cout<<"folder opened";
     }
+
 };
 
 class choice
