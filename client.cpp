@@ -24,14 +24,19 @@ protected:
 public:
     void getfilename(int sock)
     {
+        bzero(menu, 500);
+        cout << "-------------------------------------------\n";
         n = read(sock, menu, 500);
         if (n <= 0)
         {
             cerr << "Error reading menu\n";
             return;
         }
+
         menu[n] = '\0';
         cout << menu;
+        cout << "-------------------------------------------\n";
+        cout << "enter file name to download" << endl;
         bzero(filename, 200);
         fgets(filename, 200, stdin);
         filename[strcspn(filename, "\r\n")] = '\0';
@@ -91,8 +96,8 @@ public:
     {
         cout << "enter file name" << endl;
         fgets(filename, 80, stdin);
-      n = write(sock, filename, strlen(filename));
-      filename[strcspn(filename, "\r\n")] = '\0';
+        n = write(sock, filename, strlen(filename));
+        filename[strcspn(filename, "\r\n")] = '\0';
         cout << "Uploaded file: " << filename << endl;
     }
 
@@ -107,10 +112,10 @@ public:
             cerr << "file not found" << endl;
             return;
         }
-        cout<<filename;
+        cout << filename;
         long filesize = file.tellg();
         file.seekg(0, ios::beg);
-       n=send(sock, &filesize, sizeof(filesize), 0);
+        n = send(sock, &filesize, sizeof(filesize), 0);
 
         char buffer[1024];
         while (!file.eof())
@@ -167,22 +172,70 @@ private:
     int n;
     int bytes;
     char errorr[90];
+
 public:
     void enterdetails(int sock)
     {
-        cout << "enter a unique username :";
+        cout << "enter username :";
         fgets(username, 20, stdin);
         write(sock, (char *)&username, sizeof(username));
 
         cout << "enter a password :";
 
-        getline(cin, input); 
-        password=stoi(input);
-        bytes=htonl(password);        
+        getline(cin, input);
+        password = stoi(input);
+        bytes = htonl(password);
         write(sock, (char *)&bytes, sizeof(bytes));
-
     }
-    
+    void logindetails(int sock)
+    {
+        cout << "enter username :";
+        fgets(username, 20, stdin);
+        write(sock, (char *)&username, sizeof(username));
+        bzero(errorr, sizeof(errorr));
+
+        int n = recv(sock, &errorr, sizeof(errorr), 0);
+        if (n > 0)
+        {
+            errorr[n] = '\0';
+            cout << errorr << std::endl;
+            close(sock);
+            exit(1);
+        }
+        else if (n == 0)
+        {
+            std::cerr << "Server closed connection\n";
+            close(sock);
+        }
+        else
+        {
+            perror("read");
+        }
+        cout << "enter a password :";
+        getline(cin, input);
+        password = stoi(input);
+        bytes = htonl(password);
+        cout << "account created restart\n";
+    }
+    void checkdetails(int sock)
+    {
+        bzero(errorr, sizeof(errorr));
+        int n = read(sock, errorr, sizeof(errorr) - 1);
+        if (n > 0)
+        {
+            cout << errorr << endl;
+
+            if (strstr(errorr, "Invalid username or password"))
+            {
+                close(sock);
+                exit(1);
+            }
+        }
+        else
+        {
+            cerr << "Failed to receive server response." << endl;
+        }
+    }
 };
 
 class server : public menu
@@ -231,13 +284,13 @@ public:
         if (chose == 1)
         {
             logindetails.enterdetails(sockfd);
-            cout << "account created restart\n";
             exit(1);
             close(sockfd);
         }
         else if (chose == 2)
         {
             logindetails.enterdetails(sockfd);
+            logindetails.checkdetails(sockfd);
             choice(sockfd);
         }
         if (chose == 1)

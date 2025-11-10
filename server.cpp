@@ -140,10 +140,52 @@ protected:
     int storedpwd;
 
 private:
-
-
 public:
-   void createaccountdetails(int clientsock)
+    void createaccountdetails(int clientsock)
+    {
+        buffer = "enter a unique username :";
+        n = read(clientsock, username, 20);
+        username[strcspn(username, "\n\r")] = '\0';
+
+        cout << username;
+        if (n <= 0)
+        {
+            cerr << "failed to read username";
+            exit(1);
+        }
+
+        ifstream infile("password.txt");
+        string storedusr;
+        int storedpwd;
+        bool exists = false;
+        while (infile >> storedusr >> storedpwd)
+        {
+            if (storedusr == username)
+            {
+                exists = true;
+                break;
+            }
+        }
+        infile.close();
+
+        if (exists)
+        {
+            buffer = "ERROR\n";
+            send(clientsock, buffer.c_str(), buffer.size(),0);
+            return;
+        }
+
+        buffer = "enter a password";
+        n = read(clientsock, (char *)&byteschoice, sizeof(byteschoice));
+        password = ntohl(byteschoice);
+        cout << password << endl;
+
+        ofstream outfile("password.txt", ios::app);
+        outfile << username << " " << password << endl;
+        cout << "pwd stored" << endl;
+        outfile.close();
+    }
+    void enterdetails(int clientsock)
     {
         buffer = "enter a unique username :";
         n = read(clientsock, username, 20);
@@ -158,41 +200,19 @@ public:
 
         buffer = "enter a password";
         n = read(clientsock, (char *)&byteschoice, sizeof(byteschoice));
-        password = ntohl(byteschoice);
-        cout << password << endl;
-
-        ofstream outfile("password.txt", ios::app);
-        outfile << username << " " << password << endl;
-        cout << "pwd stored" << endl;
-        outfile.close();
-    }
-void enterdetails(int clientsock){
-         buffer = "enter a unique username :";
-        n = read(clientsock, username, 20);
-        username[strcspn(username, "\n\r")] = '\0';
-
-        cout << username;
         if (n <= 0)
-        {
-            cerr << "failed to read username";
-            exit(1);
-        }
-
-        buffer = "enter a password";
-        n = read(clientsock, (char *)&byteschoice, sizeof(byteschoice));
-             if (n <= 0)
         {
             cerr << "failed to read password";
             exit(1);
         }
         password = ntohl(byteschoice);
         cout << password << endl;
-}
+    }
     string returnuser()
     {
         return string(username);
     }
-    void checkdetails()
+    void checkdetails(int clientsock)
     {
         ifstream infile("password.txt");
 
@@ -210,14 +230,15 @@ void enterdetails(int clientsock){
                 break;
             }
         }
-
         if (match)
         {
-            openfolder();
+            string msg = "Login successful\n";
+            write(clientsock, msg.c_str(), msg.size());
         }
         else
         {
-            cerr << "Credentials do not match" << endl;
+            string msg = "Invalid username or password\n";
+            write(clientsock, msg.c_str(), msg.size());
         }
     }
 
@@ -230,15 +251,13 @@ void enterdetails(int clientsock){
         mkdir("users", 0777);
         std::string path = "users/" + foldername;
         mkdir(path.c_str(), 0777);
-        cout<<"folder created";
-
+        cout << "folder created";
     }
 
     void openfolder()
     {
-        cout<<"folder opened";
+        cout << "folder opened";
     }
-
 };
 
 class choice
@@ -263,7 +282,6 @@ public:
             close(clientsock);
         }
         loginchoice = ntohl(byteschoice);
-        cout << "login menu sent " << loginchoice << endl;
     }
 
     void operation(int clientsock)
@@ -356,7 +374,7 @@ public:
             else if (loginchoice == 2)
             {
                 logindetails.enterdetails(newsockfd);
-                logindetails.checkdetails();
+                logindetails.checkdetails(newsockfd);
             }
             operation(newsockfd);
             string username = logindetails.returnuser();
