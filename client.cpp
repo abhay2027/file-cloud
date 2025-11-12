@@ -55,8 +55,8 @@ class recvfile : public fileoperator, public fetch
 public:
     void execute(int sock) override
     {
-        filerecv(sock);
         getfilename(sock);
+        filerecv(sock);
     }
     void filerecv(int sock)
     {
@@ -308,16 +308,14 @@ public:
             logindetails.checkdetails(sockfd);
             choice(sockfd);
         }
-        if (chose == 1)
-
             if (chose == 1)
             {
-                op = new upload();
+                op = new recvfile();
                 op->execute(sockfd);
             }
             else if (chose == 2)
             {
-                op = new recvfile();
+                op = new upload();
                 op->execute(sockfd);
 
                 cout << "Client disconnected" << endl;
@@ -332,3 +330,4 @@ int main(int argc, char *argv[])
     s.ser();
     return 0;
 }
+
