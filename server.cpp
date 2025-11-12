@@ -38,10 +38,10 @@ public:
         cout << "recieve\n";
         bzero(filename, 80);
         n = read(clientsock, filename, 80);
-        if (n < 0)
+        if (n <= 0)
         {
             cerr << "Error reading filename\n";
-            return;
+            close(clientsock);
         }
         filename[n] = '\0';
         filename[strcspn(filename, "\r\n")] = '\0';
@@ -109,10 +109,12 @@ public:
         if (n <= 0)
         {
             cerr << "Error reading file name\n";
-            return;
+            close(clientsock);
         }
+        if(n>0){
         filename[strcspn(filename, "\r\n")] = '\0';
         cout << "Uploaded file:" << filename << endl;
+        }
     }
     void sendfilefun(int clientsock, string foldername)
     {
@@ -205,7 +207,6 @@ public:
         n = read(clientsock, username, 20);
         username[strcspn(username, "\n\r")] = '\0';
 
-        cout << username;
         if (n <= 0)
         {
             cerr << "failed to read username";
