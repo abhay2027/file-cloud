@@ -12,7 +12,7 @@ using namespace std;
 
 void error(const char *msg)
 {
-    cerr << msg << " (WSA error code: " << WSAGetLastError() << ")\n";
+    cerr << msg << ": " << WSAGetLastError() << endl;
     exit(1);
 }
 
@@ -26,68 +26,97 @@ protected:
 public:
     void getfilename(SOCKET sock)
     {
+        memset(menu, 0, sizeof(menu));
+        cout << "-------------------------------------------\n";
+
         n = recv(sock, menu, sizeof(menu) - 1, 0);
         if (n <= 0)
         {
             cerr << "Error reading menu\n";
             return;
         }
+
         menu[n] = '\0';
         cout << menu;
+        cout << "-------------------------------------------\n";
+        cout << "Enter file name to download: " << endl;
+
         memset(filename, 0, sizeof(filename));
-        fgets(filename, 200, stdin);
+        fgets(filename, sizeof(filename), stdin);
         filename[strcspn(filename, "\r\n")] = '\0';
         send(sock, filename, strlen(filename), 0);
     }
 };
 
-class recvfile : public fetch
+class fileoperator
 {
 public:
+    virtual void execute(SOCKET clientsock) = 0;
+};
+
+class recvfile : public fileoperator, public fetch
+{
+public:
+    void execute(SOCKET sock) override
+    {
+        getfilename(sock);
+        filerecv(sock);
+    }
+
     void filerecv(SOCKET sock)
     {
-        long filesize;
+        long filesize = 0;
         int n = recv(sock, (char *)&filesize, sizeof(filesize), 0);
-        if (n < 0)
+        if (n <= 0)
         {
-            cerr << "failed to receive file size";
-            exit(1);
+            cerr << "Failed to receive file size.\n";
+            return;
         }
+
         if (filesize == 0)
         {
-            cerr << "File not found or empty on server." << endl;
+            cerr << "File not found or empty on server.\n";
             return;
         }
 
         ofstream outfile(filename, ios::binary);
         if (!outfile)
         {
-            cerr << "failed to open output file";
+            cerr << "Failed to open output file.\n";
             return;
         }
 
         char buffer[1024];
-        long totalrecieved = 0;
-        while (totalrecieved < filesize)
+        long totalreceived = 0;
+        while (totalreceived < filesize)
         {
             n = recv(sock, buffer, sizeof(buffer), 0);
             if (n <= 0)
+            {
+                cerr << "File not received correctly.\n";
                 break;
-
+            }
             outfile.write(buffer, n);
-            totalrecieved += n;
+            totalreceived += n;
         }
+
         outfile.close();
-        cout << "file received: " << totalrecieved << " bytes" << endl;
+        cout << "File received: " << totalreceived << " bytes\n";
     }
 };
 
-class upload
+class upload : public fileoperator
 {
     char filename[80];
     int n;
 
 public:
+    void execute(SOCKET sock) override
+    {
+        selectfile(sock);
+        sendfilefun(sock);
+    }
+
     void selectfile(SOCKET sock)
     {
         cout << "Enter file name: ";
@@ -104,7 +133,7 @@ public:
         {
             string msg = "ERROR";
             send(sock, msg.c_str(), msg.size(), 0);
-            cerr << "File not found" << endl;
+            cerr << "File not found.\n";
             return;
         }
 
@@ -116,10 +145,11 @@ public:
         while (!file.eof())
         {
             file.read(buffer, sizeof(buffer));
-            send(sock, buffer, file.gcount(), 0);
+            send(sock, buffer, (int)file.gcount(), 0);
         }
+
         file.close();
-        cout << "File sent: " << filesize << " bytes" << endl;
+        cout << "File sent: " << filesize << " bytes\n";
     }
 };
 
@@ -132,7 +162,9 @@ protected:
 public:
     void login(SOCKET sock)
     {
-        cout << "1. Create account\n2. Login\n> ";
+        cout << "1. Create account\n"
+                "2. Login\n";
+
         string input;
         getline(cin, input);
         chose = stoi(input);
@@ -143,7 +175,10 @@ public:
 
     void choice(SOCKET sock)
     {
-        cout << "Select operation:\n1. Download file\n2. Upload file\n> ";
+        cout << "Select operation:\n"
+                "1. Download file\n"
+                "2. Upload file\n"
+                "Enter choice: ";
         string input;
         getline(cin, input);
         chose = stoi(input);
@@ -159,29 +194,73 @@ private:
     char username[20];
     int password;
     string input;
+    int bytes;
     char errorr[90];
 
 public:
     void enterdetails(SOCKET sock)
     {
         cout << "Enter username: ";
-        fgets(username, 20, stdin);
-        username[strcspn(username, "\r\n")] = '\0';
-        send(sock, username, sizeof(username), 0);
+        fgets(username, sizeof(username), stdin);
+        send(sock, (char *)&username, sizeof(username), 0);
 
         cout << "Enter password: ";
         getline(cin, input);
         password = stoi(input);
-        int bytes = htonl(password);
+        bytes = htonl(password);
         send(sock, (char *)&bytes, sizeof(bytes), 0);
+    }
+
+    void logindetails(SOCKET sock)
+    {
+        cout << "Enter username: ";
+        fgets(username, sizeof(username), stdin);
+        send(sock, (char *)&username, sizeof(username), 0);
+
+        memset(errorr, 0, sizeof(errorr));
         int n = recv(sock, errorr, sizeof(errorr) - 1, 0);
         if (n > 0)
         {
             errorr[n] = '\0';
-            if (strncmp(errorr, "ERROR", 5) == 0)
+            cout << errorr << endl;
+            closesocket(sock);
+            exit(1);
+        }
+        else if (n == 0)
+        {
+            cerr << "Server closed connection.\n";
+            closesocket(sock);
+        }
+        else
+        {
+            perror("recv");
+        }
+
+        cout << "Enter password: ";
+        getline(cin, input);
+        password = stoi(input);
+        bytes = htonl(password);
+        cout << "Account created, restart program.\n";
+    }
+
+    void checkdetails(SOCKET sock)
+    {
+        memset(errorr, 0, sizeof(errorr));
+        int n = recv(sock, errorr, sizeof(errorr) - 1, 0);
+        if (n > 0)
+        {
+            errorr[n] = '\0';
+            cout << errorr << endl;
+
+            if (strstr(errorr, "Invalid username or password"))
             {
-                cerr << "Username already exists. Please use a different one." << endl;
+                closesocket(sock);
+                exit(1);
             }
+        }
+        else
+        {
+            cerr << "Failed to receive server response.\n";
         }
     }
 };
@@ -201,73 +280,79 @@ public:
     void ser()
     {
         WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+        int wsaerr = WSAStartup(MAKEWORD(2, 2), &wsaData);
+        if (wsaerr != 0)
         {
-            error("WSAStartup failed");
+            cerr << "WSAStartup failed: " << wsaerr << endl;
+            exit(1);
         }
+
+        SOCKET sockfd;
+        int portno;
+        struct sockaddr_in serv_addr;
+        struct hostent *server;
 
         if (argc < 3)
         {
-            cerr << "Usage: " << argv[0] << " <hostname> <port>" << endl;
+            cerr << "Usage: " << argv[0] << " hostname port\n";
             WSACleanup();
             exit(1);
         }
 
-        int portno = atoi(argv[2]);
-        SOCKET sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        portno = atoi(argv[2]);
+        sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd == INVALID_SOCKET)
             error("Error opening socket");
 
-        sockaddr_in serv_addr{};
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(portno);
-
-        // Resolve hostname
-        struct hostent *server = gethostbyname(argv[1]);
+        server = gethostbyname(argv[1]);
         if (server == NULL)
         {
-            cerr << "Error: No such host\n";
+            cerr << "Error, no such host.\n";
+            closesocket(sockfd);
             WSACleanup();
             exit(1);
         }
 
-        memcpy(&serv_addr.sin_addr.s_addr, server->h_addr, server->h_length);
+        memset((char *)&serv_addr, 0, sizeof(serv_addr));
+        serv_addr.sin_family = AF_INET;
+        memcpy((char *)&serv_addr.sin_addr.s_addr, (char *)server->h_addr, server->h_length);
+        serv_addr.sin_port = htons(portno);
 
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
             error("Connection failed");
 
-        recvfile receivefile;
+        fileoperator *op;
         upload uploadfile;
         details logindetails;
 
         login(sockfd);
-
         if (chose == 1)
         {
             logindetails.enterdetails(sockfd);
-            cout << "Account created. Restart program to continue.\n";
             closesocket(sockfd);
             WSACleanup();
-            exit(0);
+            exit(1);
         }
         else if (chose == 2)
         {
             logindetails.enterdetails(sockfd);
+            logindetails.checkdetails(sockfd);
             choice(sockfd);
         }
 
         if (chose == 1)
         {
-            receivefile.getfilename(sockfd);
-            receivefile.filerecv(sockfd);
+            op = new recvfile();
+            op->execute(sockfd);
         }
         else if (chose == 2)
         {
-            uploadfile.selectfile(sockfd);
-            uploadfile.sendfilefun(sockfd);
+            op = new upload();
+            op->execute(sockfd);
+            cout << "Client disconnected.\n";
+            closesocket(sockfd);
         }
 
-        closesocket(sockfd);
         WSACleanup();
     }
 };
@@ -278,4 +363,3 @@ int main(int argc, char *argv[])
     s.ser();
     return 0;
 }
-
