@@ -44,10 +44,20 @@ public:
     }
 };
 
-class recvfile : public fetch
+class fileoperator
 {
-
 public:
+    virtual void execute(int clientsock) = 0;
+};
+
+class recvfile : public fileoperator, public fetch
+{
+public:
+    void execute(int sock) override
+    {
+        filerecv(sock);
+        getfilename(sock);
+    }
     void filerecv(int sock)
     {
         long filesize;
@@ -86,12 +96,17 @@ public:
     }
 };
 
-class upload
+class upload: public fileoperator
 {
     char filename[80];
     int n;
 
 public:
+   void execute(int sock) override
+    {
+        selectfile(sock);
+        sendfilefun(sock);
+    }
     void selectfile(int sock)
     {
         cout << "enter file name" << endl;
@@ -275,8 +290,8 @@ public:
         serv_addr.sin_port = htons(portno);
         if (connect(sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
             error("connection failed");
+        fileoperator *op; ////-----------------
 
-        recvfile recveivefile;
         upload uploadfile;
         menu choose;
         details logindetails;
@@ -294,16 +309,20 @@ public:
             choice(sockfd);
         }
         if (chose == 1)
-        {
-            recveivefile.getfilename(sockfd);
-            recveivefile.filerecv(sockfd);
-            close(sockfd);
-        }
-        if (chose == 2)
-        {
-            uploadfile.selectfile(sockfd);
-            uploadfile.sendfilefun(sockfd);
-        }
+
+            if (chose == 1)
+            {
+                op = new upload();
+                op->execute(sockfd);
+            }
+            else if (chose == 2)
+            {
+                op = new recvfile();
+                op->execute(sockfd);
+
+                cout << "Client disconnected" << endl;
+                close(sockfd);
+            }
     }
 };
 

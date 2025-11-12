@@ -21,7 +21,6 @@ class fileoperator
 {
 public:
     virtual void execute(int clientsock, const string &foldername) = 0;
-
 };
 class recvfile : public fileoperator
 {
@@ -73,7 +72,7 @@ public:
             if (n < 0)
             {
                 cerr << "file not recived";
-                exit(1);
+                close(clientsock);
             }
             outfile.write(buffer, n);
             totalrecieved += n;
@@ -166,7 +165,7 @@ public:
         if (n <= 0)
         {
             cerr << "failed to read username";
-            exit(1);
+            close(clientsock);
         }
 
         ifstream infile("password.txt");
@@ -210,7 +209,7 @@ public:
         if (n <= 0)
         {
             cerr << "failed to read username";
-            exit(1);
+            close(clientsock);
         }
 
         buffer = "enter a password";
@@ -218,7 +217,7 @@ public:
         if (n <= 0)
         {
             cerr << "failed to read password";
-            exit(1);
+             close(clientsock);
         }
         password = ntohl(byteschoice);
         cout << password << endl;
