@@ -17,14 +17,23 @@ void error(const char *msg)
     perror(msg);
     exit(1);
 }
+class fileoperator
+{
+public:
+    virtual void execute(int clientsock, const string &foldername) = 0;
 
-class recvfile
+};
+class recvfile : public fileoperator
 {
     char filename[80];
     int n;
     long filesize;
 
 public:
+    void execute(int clientsock, const string &foldername) override
+    {
+        filerecv(clientsock, foldername);
+    }
     void filerecv(int clientsock, string foldername)
     {
         cout << "recieve\n";
@@ -42,7 +51,7 @@ public:
         if (n < 0)
         {
             cerr << "failed to recieve file size";
-            exit(1);
+            close(clientsock);
         }
         if (strncmp((char *)&filesize, "ERROR", 5) == 0)
         {
@@ -74,7 +83,7 @@ public:
     }
 };
 
-class sendfile
+class sendfile : public fileoperator
 {
 protected:
     int n;
@@ -82,6 +91,11 @@ protected:
     string menu;
 
 public:
+    void execute(int clientsock, const string &foldername) override
+    {
+        filestored(clientsock, foldername);
+        sendfilefun(clientsock, foldername);
+    }
     void filestored(int clientsock, string foldername)
     {
         string path = "/home/abhaythakur/project/cpp/server/users/" + foldername;
@@ -125,6 +139,7 @@ public:
         cout << "file sent: " << filesize << " bytes" << endl;
     }
 };
+
 
 class details
 {
@@ -171,7 +186,7 @@ public:
         if (exists)
         {
             buffer = "ERROR\n";
-            send(clientsock, buffer.c_str(), buffer.size(),0);
+            send(clientsock, buffer.c_str(), buffer.size(), 0);
             return;
         }
 
@@ -346,8 +361,8 @@ public:
         clilen = sizeof(cli_addr);
         cout << "Server started on port " << portno << endl;
 
-        sendfile filesend;
-        recvfile filerecive;
+        fileoperator *op; ////-----------------
+
         while (true)
         {
             newsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
@@ -379,17 +394,16 @@ public:
             operation(newsockfd);
             string username = logindetails.returnuser();
             string username_recive_send = logindetails.returnuser();
-
             if (selectedchoice == 1)
             {
-                filesend.filestored(newsockfd, username_recive_send);
-                filesend.sendfilefun(newsockfd, username_recive_send);
-                cout << "Client disconnected" << endl;
-                close(newsockfd);
+                op = new sendfile();
+                op->execute(newsockfd, username_recive_send);
             }
             else if (selectedchoice == 2)
             {
-                filerecive.filerecv(newsockfd, username_recive_send);
+                op = new recvfile();
+               op->execute(newsockfd, username_recive_send);
+
                 cout << "Client disconnected" << endl;
                 close(newsockfd);
             }
